@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Kimi Code subagent",
+    "description": "Delegate one task to the Kimi Code CLI using its native login and settings."
+  }
+}

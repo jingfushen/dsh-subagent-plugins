@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex imagegen",
+    "description": "Adds codex_imagegen: GPT Image through Codex's built-in imagegen skill, with optional output path and reference images."
+  }
+}

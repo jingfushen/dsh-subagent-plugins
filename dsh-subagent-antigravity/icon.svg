@@ -1,0 +1,15 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dsh_antigravity_triangle" x1="18" y1="8" x2="18" y2="26" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4AEFF"/>
+      <stop offset="1" stop-color="#6D3BF5"/>
+    </linearGradient>
+    <linearGradient id="dsh_antigravity_orbit" x1="5" y1="20" x2="31" y2="20" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B6BFF"/>
+      <stop offset="1" stop-color="#E4DAFF"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="18" cy="19.5" rx="13.2" ry="5.8" transform="rotate(-24 18 19.5)" stroke="url(#dsh_antigravity_orbit)" stroke-width="1.7" stroke-opacity="0.9"/>
+  <path d="M18 7.6L26.6 22.9C27.1 23.8 26.4 24.9 25.4 24.9H10.6C9.6 24.9 8.9 23.8 9.4 22.9L18 7.6Z" fill="url(#dsh_antigravity_triangle)" fill-opacity="0.94"/>
+  <circle cx="29.2" cy="13.9" r="2.1" fill="#E4DAFF"/>
+</svg>

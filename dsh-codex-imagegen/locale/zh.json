@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Codex 图像生成",
+    "description": "新增 codex_imagegen 工具：通过 Codex 内置 imagegen 技能调用 GPT Image，可指定输出路径与参考图。"
+  }
+}

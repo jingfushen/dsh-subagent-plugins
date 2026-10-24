@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-subagent-kimicode",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One-shot Kimi Code CLI (kimi) subagent provider for DeepSeek Harness.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "meta": {
+    "title": "Kimi Code subagent",
+    "description": "Adds subagent_kimicode: one-shot delegation to the Kimi Code CLI using its native login and settings."
+  },
+  "icon": "./icon.svg"
+}

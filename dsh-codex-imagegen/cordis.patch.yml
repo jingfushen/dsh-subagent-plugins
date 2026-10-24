@@ -1,0 +1,22 @@
+# Codex imagegen: generate images through Codex CLI's built-in imagegen skill.
+# Host-plane rows only: the tool is visible to every Agent, like the official
+# native-subagent bundles. Override or disable this row by id in the profile
+# patch if the tool should stay out of some presets.
+- insert:
+    - id: tool-codex-imagegen
+      name: '@local/dsh-codex-imagegen'
+      config:
+        # Command name or absolute path of the Codex CLI (resolved in the child
+        # environment; the subprocess seam keeps PATH and HOME).
+        command: codex
+        # Optional fixed model / reasoning effort for the child Codex run.
+        # Omit both to inherit ~/.codex/config.toml (the historical preset used
+        # model: gpt-6-astra and reasoningEffort: xhigh).
+        # model: gpt-6-astra
+        # reasoningEffort: xhigh
+        # Sandbox for the child Codex process: the imagegen output usually lands
+        # outside the workspace ($CODEX_HOME/generated_images), so a write-capable
+        # sandbox is required.
+        sandbox: danger-full-access
+        proxy: http://127.0.0.1:12450
+        timeoutMs: 600000

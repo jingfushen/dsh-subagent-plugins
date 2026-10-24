@@ -1,0 +1,14 @@
+<svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dsh_plugin_art_kimi_moon" x1="6" y1="7" x2="26" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86B6FF"></stop>
+      <stop offset="1" stop-color="#2D50E2"></stop>
+    </linearGradient>
+    <linearGradient id="dsh_plugin_art_kimi_star" x1="24" y1="6" x2="30" y2="12" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D8E6FF"></stop>
+      <stop offset="1" stop-color="#7C9BFF"></stop>
+    </linearGradient>
+  </defs>
+  <path d="M13.253 9.154A10 10 0 1 0 23.747 23.846A10 10 0 0 1 13.253 9.154Z" fill="url(#dsh_plugin_art_kimi_moon)" fill-opacity="0.95"></path>
+  <path d="M27 5.6Q27.9 8.1 30.4 9Q27.9 9.9 27 12.4Q26.1 9.9 23.6 9Q26.1 8.1 27 5.6Z" fill="url(#dsh_plugin_art_kimi_star)"></path>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Antigravity 子智能体",
+    "description": "把单个自包含任务委派给 Antigravity CLI（agy），经声明的全局代理无人值守运行。"
+  }
+}

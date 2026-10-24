@@ -1,0 +1,28 @@
+{
+  "name": "@local/dsh-codex-imagegen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Codex imagegen tool: generate or edit raster images through Codex CLI's built-in imagegen skill.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "meta": {
+    "title": "Codex imagegen tool",
+    "description": "Adds codex_imagegen: GPT Image through Codex's built-in imagegen skill, with optional output path and reference images."
+  }
+}

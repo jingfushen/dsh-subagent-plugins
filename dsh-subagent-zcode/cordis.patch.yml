@@ -1,0 +1,28 @@
+# Mount rows for the ZCode subagent provider bundle.
+#
+# Two rows, because the delegation seam splits execution from presentation:
+#
+#   * `subagent-zcode` registers the provider name `zcode` on the
+#     process-global `ctx.subagents` registry. Provider names are unique per
+#     process, so this row is mounted exactly once.
+#   * `tool-subagent-zcode` is the shipped model-facing delegation tool
+#     (@deepseek-ai/dsh-tool-subagent) bound to that provider under its own
+#     tool name. `maxDepth: provider-managed` is the correct setting for an
+#     out-of-process provider: the CLI owns its own recursion budget, and the
+#     tool sends no numeric delegation-depth cap.
+#
+# Config for the provider row is intentionally empty here — the defaults
+# (appPath '/Applications/ZCode.app/Contents/Resources', no --mode, 3000 ms
+# dispose grace) suit a standard macOS ZCode.app install. Add a `config:`
+# block under `subagent-zcode` to override `appPath`, `mode`, `extraArgs`,
+# `disposeGraceMs`, or `env`; see README.md.
+
+- insert:
+    - id: subagent-zcode
+      name: '@local/dsh-subagent-zcode'
+    - id: tool-subagent-zcode
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: zcode
+        toolName: subagent_zcode
+        maxDepth: provider-managed

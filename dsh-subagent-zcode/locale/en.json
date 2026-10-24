@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "ZCode subagent",
+    "description": "Delegate one task to the ZCode CLI using its native Z.AI authentication and settings."
+  }
+}

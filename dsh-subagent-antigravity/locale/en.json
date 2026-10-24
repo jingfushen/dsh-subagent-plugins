@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Antigravity subagent",
+    "description": "Delegate one self-contained task to the Antigravity CLI (agy), run unattended through the declared global proxy."
+  }
+}

@@ -1,0 +1,9 @@
+- insert:
+    - id: subagent-kimicode
+      name: '@local/dsh-subagent-kimicode'
+    - id: tool-subagent-kimicode
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: kimicode
+        toolName: subagent_kimicode
+        maxDepth: provider-managed

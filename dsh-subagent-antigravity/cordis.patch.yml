@@ -1,0 +1,46 @@
+# Bundle layer for the Antigravity native subagent provider.
+#
+# One insert, two Host-plane rows:
+#   * subagent-antigravity registers the `antigravity` provider on the
+#     process-global `ctx.subagents` registry. Provider names are unique per
+#     process, so this row is the single place that name is registered.
+#   * tool-subagent-antigravity mounts the shipped delegation tool under the
+#     model-facing name `subagent_antigravity`, bound to that provider.
+#     `maxDepth: provider-managed` sends no DSH recursion cap: an out-of-process
+#     one-shot child (agy) owns its own budget.
+#
+# ── 全局走网络代理 / GLOBAL PROXY DECLARATION ────────────────────────────────
+# The single visible `proxy:` line below IS the global proxy declaration for
+# every DSH-started `agy` child. The provider forces this endpoint onto
+# HTTP_PROXY / HTTPS_PROXY / ALL_PROXY and sets NO_PROXY='' for each child,
+# because the subprocess seam starts children from a SCRUBBED environment that
+# would otherwise carry no proxy at all. This value must match `GLOBAL_PROXY`
+# in index.js; changing one without the other is a configuration error.
+- insert:
+    - id: subagent-antigravity
+      name: '@local/dsh-subagent-antigravity'
+      config:
+        # 全局代理声明：所有 agy 子进程强制走这里（与 index.js 的 GLOBAL_PROXY 一致）。
+        proxy: http://127.0.0.1:12450
+        # The Antigravity CLI executable; `agy` must be on the DSH process PATH.
+        command: agy
+        # Model and effort are optional. Omission leaves agy's own native
+        # selection in force (the account/plan default). Uncomment to pin.
+        # model: <agy model id>
+        # effort: max
+        # agy print mode cannot ask a human for approval. Set this to true only
+        # when you intend a fully unattended run; the default leaves agy's
+        # normal print-mode permission behavior.
+        # dangerouslySkipPermissions: true
+        # Escape hatch for extra agy flags; they are emitted before --print.
+        # extraArgs: ['--add-dir', '/path/to/repo']
+        disposeGraceMs: 3000
+        # Probe the proxy before every spawn so a dead proxy is reported as
+        # such, not as agy's account-shaped failure message.
+        verifyProxy: true
+    - id: tool-subagent-antigravity
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: antigravity
+        toolName: subagent_antigravity
+        maxDepth: provider-managed
