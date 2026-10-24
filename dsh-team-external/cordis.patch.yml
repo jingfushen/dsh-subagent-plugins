@@ -1,0 +1,47 @@
+# External agents on the DeepSeek Harness Agent Team.
+#
+# This plugin decorates the live `ctx.agentTeams` service instance instead of
+# replacing it: native Lead/teammate behavior stays untouched, while external
+# CLI agents are persisted as real Team roster members (durable team/member
+# records in the Lead Session log) so the shipped tools work on them unchanged:
+#
+#   spawn_external_teammate   (new tool, this plugin)  create an external member
+#   send_message              shipped tool  -> resumes the member's CLI conversation
+#   list_agents               shipped tool  -> external member rows with live status
+#   wait_agent                shipped tool  -> external turns notify Team activity
+#   interrupt_agent           shipped tool  -> terminates the external CLI run
+#   team_task_*               shipped tool  -> assign tasks to the external member
+#
+# External answers are delivered to the Lead as ordinary Team peer messages
+# ("Team message from <name>: ..."), exactly like a native teammate's send.
+#
+# Mount below the shipped Agent Team plugins (`@deepseek-ai/dsh-experimental-agent-team`
+# and `@deepseek-ai/dsh-experimental-tool-agent-team`); the row order in this
+# profile already satisfies that.
+- insert:
+    - id: team-external
+      name: '@local/dsh-team-external'
+      config:
+        # Global proxy applied to CLIs that need it (Antigravity on this machine).
+        # Set to null to disable. Individual provider overrides live under providers.
+        proxy: http://127.0.0.1:12450
+        verifyProxy: true
+        # Wall-clock ceiling for one external teammate turn.
+        turnTimeoutMs: 600000
+        # Grace between subprocess termination tiers.
+        disposeGraceMs: 3000
+        # External members are cheap roster rows; they get their own budget and do
+        # not consume the native Agent Team maxMembers limit.
+        maxExternalMembers: 8
+        # Per-CLI overrides: command, model, extraArgs, env.
+        providers:
+          antigravity:
+            command: agy
+            # effort: max
+          zcode:
+            command: node
+            # appPath: /Applications/ZCode.app/Contents/Resources
+            # mode: yolo
+          kimicode:
+            command: kimi
+            # permissionMode: auto

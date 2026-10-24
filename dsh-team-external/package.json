@@ -1,0 +1,30 @@
+{
+  "name": "@local/dsh-team-external",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agent Team bridge: run external CLI agents (Antigravity, ZCode, Kimi Code) as persistent Team teammates with the native spawn/send/list/wait/interrupt and task-board surface.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib/drivers.js",
+    "bin/zcode-cli.cjs",
+    "cordis.patch.yml",
+    "README.md",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "meta": {
+    "title": "External agents on the Team",
+    "description": "Adds spawn_external_teammate and bridges external CLI agents into the native Team roster, messaging, waiting, interruption, and shared task board."
+  }
+}

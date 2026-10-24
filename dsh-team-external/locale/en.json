@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "External agents on the Team",
+    "description": "Adds spawn_external_teammate and bridges external CLI agents into the native Team roster, messaging, waiting, interruption, and shared task board."
+  }
+}

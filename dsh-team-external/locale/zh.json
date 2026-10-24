@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "外部 Agent 加入团队",
+    "description": "新增 spawn_external_teammate，把外部 CLI agent 接入原生团队花名册、消息、等待、中断与共享任务看板。"
+  }
+}

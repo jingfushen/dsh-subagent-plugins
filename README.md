@@ -1,7 +1,8 @@
 # DSH Native Subagent Plugins
 
-Four independent [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) plugin bundles that
-expose one-shot external agent CLIs as native subagents, plus a Codex image-generation tool.
+Independent [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) plugin bundles that
+expose external agent CLIs as native subagents, plus a Codex image-generation tool and an
+**Agent Team bridge** that lets the same external CLIs join a Team as first-class teammates.
 Structure follows the official `@deepseek-ai/dsh-subagent-codex` / `@deepseek-ai/dsh-subagent-claude-code`
 bundles: a bundle patch inserts Host-plane rows — a provider row on `ctx.subagents` and a
 `@deepseek-ai/dsh-tool-subagent` delegation-tool row (`maxDepth: provider-managed`).
@@ -15,11 +16,14 @@ bundle, installed independently — no shared aggregator package.
 | [`dsh-subagent-antigravity`](dsh-subagent-antigravity/) | subagent provider | `subagent_antigravity` | Antigravity CLI `agy` 1.4.7, forced through a declared global proxy | ✅ real delegation returned `OK,ANTIGRAVITY-DSH` |
 | [`dsh-subagent-kimicode`](dsh-subagent-kimicode/) | subagent provider | `subagent_kimicode` | Kimi Code CLI 2.3.1 (`kimi -p ... --output-format text`) | ⚠️ failure path verified; success path needs `kimi login` |
 | [`dsh-codex-imagegen`](dsh-codex-imagegen/) | model tool | `codex_imagegen` | Codex CLI `codex exec` + built-in imagegen skill (`image_gen`) | ✅ generated a real 1254×1254 PNG |
+| [`dsh-team-external`](dsh-team-external/) | Agent Team bridge (mod) | `spawn_external_teammate` (+ shipped Team tools) | Antigravity / ZCode / Kimi Code as durable Team teammates | ✅ live spawn/send/list/wait/interrupt + task owner + resume across reload |
 
 Reports:
 
 - [REPORT-dsh-subagent-plugins.md](REPORT-dsh-subagent-plugins.md) — implementation, installation,
   end-to-end verification, prerequisites, rollback, known gaps.
+- [REPORT-dsh-team-external.md](REPORT-dsh-team-external.md) — the Agent Team mod: why the shipped
+  Team cannot spawn external agents, how the bridge decorates the live service, and the live evidence.
 - [REPORT-dsh-native-subagents.md](REPORT-dsh-native-subagents.md) — how the official DSH Codex /
   Claude Code native-subagent packages are built (source-level deep dive), used as the template here.
 
@@ -30,7 +34,9 @@ dsh-subagent-zcode/          # provider `zcode`  + tool `subagent_zcode`
 dsh-subagent-antigravity/    # provider `antigravity` + tool `subagent_antigravity`
 dsh-subagent-kimicode/       # provider `kimicode` + tool `subagent_kimicode`
 dsh-codex-imagegen/          # tool `codex_imagegen`
+dsh-team-external/           # Agent Team bridge: `spawn_external_teammate` + external roster members
 REPORT-dsh-subagent-plugins.md
+REPORT-dsh-team-external.md
 REPORT-dsh-native-subagents.md
 artifacts/                   # end-to-end evidence (generated image)
 ```
@@ -65,6 +71,11 @@ Manual alternative: add the same two rows from the plugin's `cordis.patch.yml` t
 - **Codex imagegen plugin**: `codex` signed in with ChatGPT; the built-in `image_gen` tool needs no
   `OPENAI_API_KEY`. Default proxy `127.0.0.1:12450`; image output lands outside the workspace so the
   child runs with `sandbox: danger-full-access` by default (configurable).
+- **Team bridge plugin**: requires the shipped experimental Agent Team bundles
+  (`@deepseek-ai/dsh-experimental-agent-team` + `-tool-agent-team`). Same CLI prerequisites as above;
+  Antigravity/ZCode can work immediately, Kimi Code needs `kimi login`. External members get their own
+  admission budget (`maxExternalMembers`, default 8) and do not consume the native Team member limit.
+  The Lead assigns their tasks and completes them; external answers arrive as Team peer messages.
 
 ### Antigravity global proxy declaration
 
