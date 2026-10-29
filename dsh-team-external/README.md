@@ -48,6 +48,33 @@ Everything after creation uses the **shipped, unchanged tools**:
   so **the Lead** assigns, edits and eventually completes their tasks and should send the task
   text explicitly.
 
+## Team CLI: external teammates work on the Team themselves (v1.1)
+
+External CLIs cannot call DSH tools directly, so the bridge ships a small **Team CLI** and injects it
+into every external teammate turn:
+
+- the first turn prepends a short protocol block naming the exact commands;
+- every turn exports `DSH_TEAM_CLI`, `DSH_TEAM_SOCKET`, `DSH_TEAM_TOKEN`, `DSH_TEAM_MEMBER`,
+  `DSH_TEAM_NAME` (token-guarded unix socket inside the Host process);
+- the teammate runs the CLI with its own shell/bash tool.
+
+```bash
+node "$DSH_TEAM_CLI" whoami                     # name, member id, team id, provider
+node "$DSH_TEAM_CLI" list                       # Team members and status
+node "$DSH_TEAM_CLI" tasks                      # shared task board
+node "$DSH_TEAM_CLI" task-claim task-7 --rev 1  # claim like a native teammate
+node "$DSH_TEAM_CLI" task-complete task-7 --rev 2
+node "$DSH_TEAM_CLI" task-create --subject "..." --description "..."
+node "$DSH_TEAM_CLI" task-edit task-7 --rev 2 --description "..."
+node "$DSH_TEAM_CLI" send --to lead "progress or result"
+node "$DSH_TEAM_CLI" send --to other-external-agent "peer message"
+node "$DSH_TEAM_CLI" wait --timeout 30000
+```
+
+So external teammates can now self-claim and self-complete board tasks, create tasks, read the roster,
+initiate messages to the Lead, and message other external teammates. Messages the Lead sends are framed
+as `Team message from <sender>:` exactly like native peer messages.
+
 ## Backends
 
 | provider | start | resume | conversation id source |
@@ -118,23 +145,31 @@ prefer `permissions.allow` rules in agy's settings.
 - `team_task_update action=reassign owner=zcode-recon` produced `ownerName: "zcode-recon"`.
 - Kimi failure path: `kimi-recon` settled `inactive` with the bounded
   "No model configured … run `kimi login`" diagnostic as a peer message.
-- In-memory seam self-test: 41/41 checks (adapter argv/env, queueing, wrappers, delegation,
-  duplicate/invalid-name rejection, uninstall restoration).
+- **Self-service Team CLI (v1.1)**: created task-9, spawned a fresh `cli-agy` teammate whose
+  first turn contained the protocol block; it ran `whoami`, `tasks`, `task-claim task-9 --rev 1`,
+  `task-complete task-9 --rev 2` and `send --to lead "CLI-AGY-OK: claimed and completed task-9"`
+  by itself — the board showed `ownerName: cli-agy` and `completed`; a `cli-zcode` teammate also ran
+  `whoami` + `send --to lead "CLI-ZCODE-OK"` from its own shell.
+- In-memory seam self-test: **37/37** checks (protocol/env injection, control socket auth, task
+  create/claim/complete/claim-stale, lead messaging, real `team-cli.cjs` child calls, queueing,
+  wrappers, delegation, duplicate/invalid-name rejection, uninstall restoration).
 
 **Unverified:** Kimi success path (needs login); native browser roster live status for external
 members beyond the durable projection (the bridge only feeds phase + provider); mid-turn
 `send_message` steering semantics are queue-based, not step-boundary steering; non-macOS.
 
-## Limits
+## Limits (updated in v1.1)
 
+- **Solved**: external teammates can now send Team messages themselves, read the roster, and
+  claim/complete/create/edit tasks through the injected Team CLI. They still have no generic DSH
+  tools (file/search/etc.) — that is expected, they use their own product tools.
+- **Unsolved**: external members cannot message a *native* teammate directly (the bridge cannot
+  steer a native child inbox without the Lead's authority); send to `lead` and let the Lead relay.
 - One CLI turn runs at a time per member; messages sent while running are queued and run next.
 - No cold resume of a turn that was killed mid-flight; the conversation itself keeps resuming.
-- External members have no DSH tools: they cannot send Team messages themselves, claim/complete
-  tasks, or read the task board. The bridge delivers their final answer to the Lead as a peer
-  message. Everything else (naming, status, waiting, interruption, task ownership, roster
-  projection) is native.
 - The bridge decorates the service instance at mount; if the shipped Team service is renamed in a
   future DSH version, the plugin row must be updated.
+- Kimi Code success path is unverified until `kimi login`; its failure path is verified.
 
 ## Uninstall
 

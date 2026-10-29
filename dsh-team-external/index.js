@@ -34,10 +34,11 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { connect } from 'node:net'
-import { join } from 'node:path'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { connect, createServer } from 'node:net'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { PROVIDER_IDS, PROVIDER_LABELS, resolveAdapter } from './lib/drivers.js'
 
 /** Marks a roster member whose backend is an external CLI. */
@@ -66,6 +67,32 @@ const SPAWN_DESCRIPTION = [
   'External members return work as Team peer messages ("Team message from <name>: ..."). They cannot call Team tools themselves: the Lead assigns/edits/ completes their tasks with `team_task_update` (`reassign` to the member name), and should send them the task text explicitly.',
   'Only the Team Lead can create external teammates. Prefer native `spawn_teammate` when the task needs DSH tools or a shared context; choose an external backend when the task should run on that specific agent product.',
 ].join(' ')
+
+/**
+ * The protocol block injected into an external teammate's first turn. The
+ * bridge also injects the same facts as environment variables, so the command
+ * paths below keep working even when the CLI's shell starts in another cwd.
+ */
+function protocolIntro(runner) {
+  return [
+    '[DSH Team protocol]',
+    `You are "${runner.name}", an external teammate in a DeepSeek Harness Agent Team (member id ${runner.memberId}).`,
+    'You are part of the Team: you can message the Lead and use the shared task board through the Team CLI in your shell.',
+    'The CLI path and connection are already exported in your environment; run these commands with your own shell/bash tool:',
+    '  node "$DSH_TEAM_CLI" whoami            # your name, member id, team id, provider',
+    '  node "$DSH_TEAM_CLI" list              # Team members (lead + teammates) and their status',
+    '  node "$DSH_TEAM_CLI" tasks             # shared task board (id, revision, status, owner)',
+    '  node "$DSH_TEAM_CLI" task-get <id>     # one task',
+    '  node "$DSH_TEAM_CLI" task-claim <id> --rev <revision>',
+    '  node "$DSH_TEAM_CLI" task-complete <id> --rev <revision>',
+    '  node "$DSH_TEAM_CLI" task-create --subject "..." --description "..."',
+    '  node "$DSH_TEAM_CLI" task-edit <id> --rev <revision> --description "..."',
+    '  node "$DSH_TEAM_CLI" send --to lead "progress or result message"',
+    '  node "$DSH_TEAM_CLI" wait --timeout 30000   # wait for the next Team change',
+    'Team rules: claim a ready task before working on it and complete it when done; report progress and the final result to the Lead with `send --to lead`; be concise, and include the file paths a native teammate would need. The Lead hears from you only through these messages.',
+    '[End of DSH Team protocol]',
+  ].join('\n')
+}
 
 /** Deep-freeze plain JSON data (messages are immutable by contract). */
 function deepFreeze(value) {
@@ -251,6 +278,175 @@ function installBridge(ctx, config) {
   const waiters = new Map()
   const persisted = loadState()
   const disposals = []
+
+  // ── Team CLI control channel ─────────────────────────────────────────────
+  // External CLI agents cannot call DSH tools directly, so the bridge exposes
+  // the same Team surfaces over a token-guarded unix socket and ships a small
+  // `team-cli.cjs` they invoke from their own shell tool.
+  const control = {
+    token: randomUUID(),
+    // Unix socket paths are length-bounded (~104 bytes on macOS); a short tmp
+    // path keeps the control channel usable under long DSH_HOME values.
+    path: join(tmpdir(), `dsh-team-external-${process.pid}.sock`),
+    cliPath: fileURLToPath(new URL('./bin/team-cli.cjs', import.meta.url)),
+    server: undefined,
+  }
+
+  /** Environment injected into every external teammate turn. */
+  function controlEnv(runner) {
+    return {
+      DSH_TEAM_CLI: control.cliPath,
+      DSH_TEAM_SOCKET: control.path,
+      DSH_TEAM_TOKEN: control.token,
+      DSH_TEAM_MEMBER: runner.memberId,
+      DSH_TEAM_NAME: runner.name,
+      DSH_TEAM_PROVIDER: runner.provider,
+    }
+  }
+
+  /** Resolve the runner and teammate membership for one control request. */
+  function resolveMemberContext(memberId) {
+    const existing = runners.get(memberId)
+    if (existing !== undefined) {
+      const root = ctx.agents.get(existing.teamId) ?? existing.root
+      if (root === undefined || root === null) throw new Error('team-cli: the Team Lead is no longer live')
+      existing.root = root
+      return { runner: existing, membership: { root, id: existing.teamId, role: 'teammate', name: existing.name } }
+    }
+    for (const [teamId, members] of Object.entries(persisted.teams ?? {})) {
+      if (members?.[memberId] === undefined) continue
+      const root = ctx.agents.get(teamId)
+      if (root === undefined || root === null) continue
+      const state = service.journal.state(root)
+      const member = state.members.find((candidate) => candidate.id === memberId)
+      if (member === undefined) continue
+      const runner = ensureRunner(teamId, member, root)
+      return { runner, membership: { root, id: teamId, role: 'teammate', name: member.name } }
+    }
+    throw new Error(`team-cli: unknown external teammate ${JSON.stringify(memberId)}`)
+  }
+
+  /** Deliver one external teammate's message to the Lead or another external member. */
+  async function controlSend(runner, membership, to, text) {
+    const target = String(to ?? '').trim()
+    const message = String(text ?? '').trim()
+    if (target.length === 0) throw new Error('team-cli: send requires --to <lead|member>')
+    if (message.length === 0) throw new Error('team-cli: send requires a message text')
+    if (target === 'lead') {
+      deliverToLead(runner, message)
+      notifyActivity(membership.id)
+      return { delivered: true, to: 'lead' }
+    }
+    const state = service.journal.state(membership.root)
+    const member = state.members.find((candidate) => candidate.name === target)
+    if (member === undefined) throw new Error(`team-cli: no Team member named ${JSON.stringify(target)}`)
+    if (!isExternal(member)) throw new Error(`team-cli: "${target}" is a native teammate — send to "lead" and let the Lead relay`)
+    if (member.phase !== 'active') throw new Error(`team-cli: teammate ${JSON.stringify(target)} is not active`)
+    const targetRunner = ensureRunner(membership.id, member, membership.root)
+    targetRunner.queue.push(`Team message from ${runner.name}:\n${message}`)
+    notifyActivity(membership.id)
+    pump(targetRunner)
+    return { delivered: true, to: target }
+  }
+
+  /** Execute one authenticated control command. */
+  async function runControlCommand(request) {
+    if (request === null || typeof request !== 'object') throw new Error('team-cli: invalid request')
+    if (request.token !== control.token) throw new Error('team-cli: invalid token')
+    const memberId = typeof request.member === 'string' ? request.member : ''
+    const { runner, membership } = resolveMemberContext(memberId)
+    const args = request.args !== null && typeof request.args === 'object' ? request.args : {}
+    switch (request.cmd) {
+      case 'whoami':
+        return { name: runner.name, memberId: runner.memberId, teamId: runner.teamId, provider: runner.provider, role: 'teammate' }
+      case 'list':
+        return { members: service.roster.list(membership) }
+      case 'tasks':
+        return { tasks: service.tasks.list(membership) }
+      case 'task-get':
+        return { task: service.tasks.get(membership, String(args.taskId)) }
+      case 'task-create':
+        return {
+          task: await service.tasks.create(membership, {
+            subject: String(args.subject ?? ''),
+            description: String(args.description ?? ''),
+            ...(Array.isArray(args.blockedBy) ? { blockedBy: args.blockedBy.map(String) } : {}),
+            ...(Array.isArray(args.writeScopes) ? { writeScopes: args.writeScopes.map(String) } : {}),
+          }),
+        }
+      case 'task-update': {
+        const update = { taskId: String(args.taskId), expectedRevision: Number(args.expectedRevision), action: String(args.action) }
+        for (const key of ['subject', 'description']) if (typeof args[key] === 'string') update[key] = args[key]
+        for (const key of ['blockedBy', 'writeScopes']) if (Array.isArray(args[key])) update[key] = args[key].map(String)
+        if (typeof args.owner === 'string') update.owner = args.owner
+        return { task: await service.tasks.update({ id: runner.memberId }, membership, update) }
+      }
+      case 'send':
+        return await controlSend(runner, membership, args.to, args.text)
+      case 'wait': {
+        const timeoutMs = Math.min(3_600_000, Math.max(10_000, Number(args.timeoutMs) || 60_000))
+        const result = await service.activity.wait(membership.id, timeoutMs, new AbortController().signal)
+        return { timedOut: result.timedOut === true }
+      }
+      default:
+        throw new Error(`team-cli: unknown command ${JSON.stringify(request.cmd)}`)
+    }
+  }
+
+  /** Start the token-guarded unix-socket control server. */
+  function startControlServer() {
+    try {
+      mkdirSync(dirname(control.path), { recursive: true })
+    }
+    catch {}
+    try {
+      unlinkSync(control.path)
+    }
+    catch {}
+    control.server = createServer((socket) => {
+      let buffer = ''
+      socket.setEncoding('utf8')
+      socket.on('error', () => {})
+      socket.on('data', (chunk) => {
+        buffer += chunk
+        const newline = buffer.indexOf('\n')
+        if (newline < 0) return
+        const line = buffer.slice(0, newline)
+        let request
+        try {
+          request = JSON.parse(line)
+        }
+        catch {
+          socket.end(`${JSON.stringify({ ok: false, error: 'team-cli: invalid JSON request' })}\n`)
+          return
+        }
+        runControlCommand(request).then(
+          (result) => socket.end(`${JSON.stringify({ ok: true, result })}\n`),
+          (error) => socket.end(`${JSON.stringify({ ok: false, error: String(error?.message ?? error) })}\n`),
+        )
+      })
+    })
+    control.server.on('error', () => {})
+    control.server.listen(control.path, () => {
+      // The token is the real gate; the file mode keeps other local users out.
+      try {
+        chmodSync(control.path, 0o600)
+      }
+      catch {}
+    })
+  }
+
+  /** Close the control server and remove its socket file. */
+  function stopControlServer() {
+    try {
+      control.server?.close()
+    }
+    catch {}
+    try {
+      unlinkSync(control.path)
+    }
+    catch {}
+  }
   let proxyOkAt = 0
 
   /** Fail a turn early when the configured proxy is down (agy needs it). */
@@ -387,14 +583,14 @@ function installBridge(ctx, config) {
 
   /** Run one CLI turn; returns a completion promise that settles to a result. */
   function beginTurn(runner, task) {
-    const prompt = String(task)
+    const prompt = runner.conversationId === undefined ? `${protocolIntro(runner)}\n\n${String(task)}` : String(task)
     if (Buffer.byteLength(prompt, 'utf8') > MAX_PROMPT_BYTES) {
       throw new Error(`external teammate prompt is too large (${Buffer.byteLength(prompt, 'utf8')} bytes, limit ${MAX_PROMPT_BYTES})`)
     }
     const spec = runner.conversationId === undefined
       ? runner.adapter.start({ task: prompt, cwd: runner.cwd, config })
       : runner.adapter.resume({ task: prompt, cwd: runner.cwd, conversationId: runner.conversationId, config })
-    const env = runner.adapter.env(config)
+    const env = { ...runner.adapter.env(config), ...controlEnv(runner) }
     const child = ctx.subprocess.spawn({
       argv: spec.argv,
       cwd: spec.cwd ?? runner.cwd,
@@ -622,7 +818,7 @@ function installBridge(ctx, config) {
     }
     const runner = ensureRunner(membership.id, member, membership.root)
     if (runner.running !== true) await ensureProxy(runner.adapter)
-    runner.queue.push(text)
+    runner.queue.push(`Team message from ${membership.name}:\n${text}`)
     notifyActivity(membership.id)
     pump(runner)
     return { messageId: randomUUID() }
@@ -777,6 +973,7 @@ function installBridge(ctx, config) {
       set.clear()
     }
     waiters.clear()
+    stopControlServer()
     toolDispose?.()
     service.listMembers = originals.listMembers
     service.sendMessage = originals.sendMessage
@@ -786,6 +983,8 @@ function installBridge(ctx, config) {
     delete service.spawnExternalTeammate
     delete service.__teamExternal
   })
+
+  startControlServer()
 
   Object.defineProperty(service, '__teamExternal', {
     value: { runners, spawnExternalTeammate },
