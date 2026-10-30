@@ -212,6 +212,8 @@ await flush()
 check('resume answer delivered', steered.at(-1)?.content[1].text === 'ANSWER-2')
 
 // ── control channel (same process) ─────────────────────────────────────────
+state.members.unshift({ id: 'native-1', name: 'native-one', description: 'a native teammate', provider: 'spawn', context: 'fresh', phase: 'active' })
+
 function controlRequest(payload) {
   return new Promise((resolve, reject) => {
     const socket = net.connect({ path: env.DSH_TEAM_SOCKET })
@@ -230,7 +232,7 @@ check('whoami over socket', whoami.ok === true && whoami.result.name === 'agy-wo
 const badToken = await controlRequest({ cmd: 'whoami', args: {}, token: 'nope' })
 check('bad token rejected', badToken.ok === false && /invalid token/u.test(badToken.error))
 const listed = await controlRequest({ cmd: 'list', args: {} })
-check('list over socket', listed.ok === true && listed.result.members.length === 2)
+check('list over socket', listed.ok === true && listed.result.members.length === 3)
 const created = await controlRequest({ cmd: 'task-create', args: { subject: 'cli task', description: 'made by external teammate' } })
 check('external creates task', created.ok === true && created.result.task.id === 'task-1', JSON.stringify(created.result?.task?.id))
 const claimed = await controlRequest({ cmd: 'task-update', args: { taskId: 'task-1', expectedRevision: 1, action: 'claim' } })
@@ -243,6 +245,8 @@ const tasksList = await controlRequest({ cmd: 'tasks', args: {} })
 check('tasks list over socket', tasksList.ok === true && tasksList.result.tasks.length === 1)
 const extSend = await controlRequest({ cmd: 'send', args: { to: 'lead', text: 'external progress note' } })
 check('external messages lead', extSend.ok === true && steered.at(-1)?.content[1].text === 'external progress note')
+const relaySend = await controlRequest({ cmd: 'send', args: { to: 'native-one', text: 'message for the native teammate' } })
+check('external relays to native teammate', relaySend.ok === true && relaySend.result.relayedBy === 'lead' && delegation.some((entry) => entry.method === 'sendMessage' && entry.target === 'native-one'), JSON.stringify(relaySend.result))
 const badTarget = await controlRequest({ cmd: 'send', args: { to: 'nobody', text: 'hi' } })
 check('unknown member target rejected', badTarget.ok === false && /no Team member/u.test(badTarget.error))
 

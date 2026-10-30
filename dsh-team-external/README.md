@@ -68,12 +68,24 @@ node "$DSH_TEAM_CLI" task-create --subject "..." --description "..."
 node "$DSH_TEAM_CLI" task-edit task-7 --rev 2 --description "..."
 node "$DSH_TEAM_CLI" send --to lead "progress or result"
 node "$DSH_TEAM_CLI" send --to other-external-agent "peer message"
+node "$DSH_TEAM_CLI" send --to native-teammate "message to a native DSH teammate"
 node "$DSH_TEAM_CLI" wait --timeout 30000
 ```
 
 So external teammates can now self-claim and self-complete board tasks, create tasks, read the roster,
 initiate messages to the Lead, and message other external teammates. Messages the Lead sends are framed
 as `Team message from <sender>:` exactly like native peer messages.
+
+### Reaching native DSH teammates (Lead-authorized relay)
+
+An external CLI has no DSH Agent credential, so it cannot write into a native child inbox directly. The
+bridge therefore relays `send --to <native-teammate>` through the Lead's authority (the user explicitly
+authorized this) and keeps the attribution explicit: the native teammate receives a native Team peer
+message from the Lead whose content starts with `Forwarded from external teammate <name> (<provider>,
+member <id>):` followed by the external teammate's text. Native teammates can reply straight back to the
+external member with their normal `send_message` tool — the bridge intercepts that target and delivers
+it as the next turn of the external CLI conversation. Set `allowNativeRelay: false` in the row config to
+disable the external→native direction.
 
 ## Backends
 
@@ -116,6 +128,7 @@ install order does this for you):
 | `turnTimeoutMs` | `600000` | wall-clock ceiling for one external turn |
 | `disposeGraceMs` | `3000` | grace between subprocess termination tiers |
 | `maxExternalMembers` | `8` | external members are cheap roster rows, so they get their own budget instead of consuming the native `maxMembers` limit |
+| `allowNativeRelay` | `true` | allow `send --to <native-teammate>` relayed through the Lead's authority (user-authorized) |
 | `providers.<id>.command` | adapter default | CLI path/name |
 | `providers.<id>.model`, `.effort`, `.mode`, `.dangerouslySkipPermissions`, `.extraArgs`, `.env` | — | adapter-specific overrides |
 
@@ -145,13 +158,17 @@ prefer `permissions.allow` rules in agy's settings.
 - `team_task_update action=reassign owner=zcode-recon` produced `ownerName: "zcode-recon"`.
 - Kimi failure path: `kimi-recon` settled `inactive` with the bounded
   "No model configured … run `kimi login`" diagnostic as a peer message.
+- **Bidirectional native messaging (v1.2)**: `cli-agy` sent `--to kimi-spec-dev` through the Team CLI,
+  the bridge relayed it under the Lead's authority, and the native `kimi-spec-dev` woke up and answered
+  `RELAY-OK`. Then `kimi-spec-dev` used its normal `send_message` tool against `cli-agy`, and the
+  external teammate received `NATIVE-TO-EXT-OK` and reported it back to the Lead.
 - **Self-service Team CLI (v1.1)**: created task-9, spawned a fresh `cli-agy` teammate whose
   first turn contained the protocol block; it ran `whoami`, `tasks`, `task-claim task-9 --rev 1`,
   `task-complete task-9 --rev 2` and `send --to lead "CLI-AGY-OK: claimed and completed task-9"`
   by itself — the board showed `ownerName: cli-agy` and `completed`; a `cli-zcode` teammate also ran
   `whoami` + `send --to lead "CLI-ZCODE-OK"` from its own shell.
-- In-memory seam self-test: **37/37** checks (protocol/env injection, control socket auth, task
-  create/claim/complete/claim-stale, lead messaging, real `team-cli.cjs` child calls, queueing,
+- In-memory seam self-test: **38/38** checks (protocol/env injection, control socket auth, task
+  create/claim/complete/claim-stale, lead messaging, native-teammate relay, real `team-cli.cjs` child calls, queueing,
   wrappers, delegation, duplicate/invalid-name rejection, uninstall restoration).
 
 **Unverified:** Kimi success path (needs login); native browser roster live status for external
@@ -161,10 +178,12 @@ members beyond the durable projection (the bridge only feeds phase + provider); 
 ## Limits (updated in v1.1)
 
 - **Solved**: external teammates can now send Team messages themselves, read the roster, and
-  claim/complete/create/edit tasks through the injected Team CLI. They still have no generic DSH
-  tools (file/search/etc.) — that is expected, they use their own product tools.
-- **Unsolved**: external members cannot message a *native* teammate directly (the bridge cannot
-  steer a native child inbox without the Lead's authority); send to `lead` and let the Lead relay.
+  claim/complete/create/edit tasks through the injected Team CLI. They can also reach native DSH
+  teammates through the Lead-authorized relay described above; native teammates reply to them with
+  their normal `send_message` tool. External members still have no generic DSH tools
+  (file/search/etc.) — that is expected, they use their own product tools.
+- External→native messages are relayed by the Lead (the external member has no Agent credential), so
+  the native teammate sees a Lead peer message whose content is explicitly attributed as forwarded.
 - One CLI turn runs at a time per member; messages sent while running are queued and run next.
 - No cold resume of a turn that was killed mid-flight; the conversation itself keeps resuming.
 - The bridge decorates the service instance at mount; if the shipped Team service is renamed in a

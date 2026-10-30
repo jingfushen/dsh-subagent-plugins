@@ -88,6 +88,7 @@ function protocolIntro(runner) {
     '  node "$DSH_TEAM_CLI" task-create --subject "..." --description "..."',
     '  node "$DSH_TEAM_CLI" task-edit <id> --rev <revision> --description "..."',
     '  node "$DSH_TEAM_CLI" send --to lead "progress or result message"',
+    '  node "$DSH_TEAM_CLI" send --to <teammate-name> "message to a native or external teammate"',
     '  node "$DSH_TEAM_CLI" wait --timeout 30000   # wait for the next Team change',
     'Team rules: claim a ready task before working on it and complete it when done; report progress and the final result to the Lead with `send --to lead`; be concise, and include the file paths a native teammate would need. The Lead hears from you only through these messages.',
     '[End of DSH Team protocol]',
@@ -177,6 +178,10 @@ function resolveConfig(config) {
     // External members are not native child Sessions, so they get their own
     // admission budget instead of consuming the native Team member limit.
     maxExternalMembers: positive(source.maxExternalMembers, 8),
+    // External teammates have no DSH Agent credential; reaching a native child
+    // inbox requires the Lead's authority. Enabled after explicit user consent;
+    // the relay is attributed as "Forwarded from external teammate ...".
+    allowNativeRelay: source.allowNativeRelay !== false,
   }
 }
 
@@ -340,7 +345,24 @@ function installBridge(ctx, config) {
     const state = service.journal.state(membership.root)
     const member = state.members.find((candidate) => candidate.name === target)
     if (member === undefined) throw new Error(`team-cli: no Team member named ${JSON.stringify(target)}`)
-    if (!isExternal(member)) throw new Error(`team-cli: "${target}" is a native teammate — send to "lead" and let the Lead relay`)
+    if (!isExternal(member)) {
+      // External teammates have no Agent credential of their own, so the only
+      // sanctioned way into a native child inbox is the Lead's authority. The
+      // user authorized this relay; attribution stays explicit in the content.
+      if (config.allowNativeRelay !== true) throw new Error(`team-cli: messaging native teammates is disabled by config (allowNativeRelay: false); send to "lead" instead`)
+      if (member.phase !== 'active') throw new Error(`team-cli: teammate ${JSON.stringify(target)} is not active`)
+      const relay = new AbortController()
+      const delivered = await originals.sendMessage(membership.root, {
+        target,
+        content: [
+          { type: 'text', text: `Forwarded from external teammate ${runner.name} (${runner.provider}, member ${runner.memberId}):` },
+          { type: 'text', text: message },
+        ],
+        signal: relay.signal,
+      })
+      notifyActivity(membership.id)
+      return { delivered: true, to: target, relayedBy: 'lead', messageId: delivered?.messageId }
+    }
     if (member.phase !== 'active') throw new Error(`team-cli: teammate ${JSON.stringify(target)} is not active`)
     const targetRunner = ensureRunner(membership.id, member, membership.root)
     targetRunner.queue.push(`Team message from ${runner.name}:\n${message}`)

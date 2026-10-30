@@ -16,7 +16,7 @@ bundle, installed independently — no shared aggregator package.
 | [`dsh-subagent-antigravity`](dsh-subagent-antigravity/) | subagent provider | `subagent_antigravity` | Antigravity CLI `agy` 1.4.7, forced through a declared global proxy | ✅ real delegation returned `OK,ANTIGRAVITY-DSH` |
 | [`dsh-subagent-kimicode`](dsh-subagent-kimicode/) | subagent provider | `subagent_kimicode` | Kimi Code CLI 2.3.1 (`kimi -p ... --output-format text`) | ⚠️ failure path verified; success path needs `kimi login` |
 | [`dsh-codex-imagegen`](dsh-codex-imagegen/) | model tool | `codex_imagegen` | Codex CLI `codex exec` + built-in imagegen skill (`image_gen`) | ✅ generated a real 1254×1254 PNG |
-| [`dsh-team-external`](dsh-team-external/) | Agent Team bridge (mod) | `spawn_external_teammate` (+ shipped Team tools + injected Team CLI) | Antigravity / ZCode / Kimi Code as durable Team teammates | ✅ live spawn/send/list/wait/interrupt + task owner + resume across reload; v1.1 external teammates self-claim/complete tasks and message the Lead through the injected CLI |
+| [`dsh-team-external`](dsh-team-external/) | Agent Team bridge (mod) | `spawn_external_teammate` (+ shipped Team tools + injected Team CLI) | Antigravity / ZCode / Kimi Code as durable Team teammates | ✅ live spawn/send/list/wait/interrupt + task self-claim/complete + bidirectional messages with native teammates (Lead-authorized relay) + resume across reload |
 
 Reports:
 
@@ -78,7 +78,9 @@ Manual alternative: add the same two rows from the plugin's `cordis.patch.yml` t
   The bridge injects a token-guarded **Team CLI** into every external teammate turn, so the external
   agent itself can list members, read the task board, claim/complete/create tasks, message the Lead and
   wait — and it receives Lead messages as `Team message from <sender>:` framed prompts. Answers also
-  arrive as Team peer messages.
+  arrive as Team peer messages. External↔native messaging is bidirectional: external→native is relayed
+  under the Lead's authority with explicit `Forwarded from external teammate …` attribution, and
+  native→external is intercepted by the bridge and delivered as the external CLI's next turn.
 
 ### Antigravity global proxy declaration
 

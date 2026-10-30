@@ -40,6 +40,11 @@ inbox。外部 CLI 是进程外的一次性运行，没有 inbox、没有可续�
    自己的 shell 里调用，把原生的「花名册 / 任务板 / 发消息 / wait」暴露给它（任务操作直接走 Team 内部
    `service.tasks`，权限按成员身份校验）。每个 turn 注入 socket/token/member 环境变量，首个 turn 自动附协议说明。
 
+8. **原生队友消息中继（v1.2）**：外部队友没有 DSH Agent 凭证，给原生子 Agent 的 inbox 投递只能借用 Lead 的
+   授权通道。用户明确授权后，桥接把 `send --to <native-teammate>` 通过 Lead 的服务方法投递，内容显式标注
+   `Forwarded from external teammate <name> (<provider>, member <id>):`；原生队友用普通 `send_message` 回复
+   外部队友时，桥接拦截该目标并把消息排进外部 CLI 的下一轮。可用 `allowNativeRelay: false` 关闭。
+
 ## 3. 三个后端（均已实测）
 
 | provider | 启动 | 续聊 | 会话 id |
@@ -96,13 +101,22 @@ send --to lead "..." | send --to <autre-external> "..." | wait --timeout 30000
 | 另一个后端 | ✅ `cli-zcode`（zcode）自己跑 `whoami` + `send --to lead "CLI-ZCODE-OK: ..."` |
 | 内存自测（v1.1） | ✅ 37/37：首轮协议/环境注入、控制 socket 鉴权、任务 create/claim/complete/过期 revision、给 Lead 发消息、真实 `team-cli.cjs` 子进程调用、排队、装饰/委托、重名拒绝、卸载恢复、socket 关闭 |
 
+**v1.2 新增实证（双向消息）：**
+
+| 场景 | 结果 |
+|---|---|
+| 外部队友 → 原生队友 | ✅ `cli-agy` 执行 `send --to kimi-spec-dev ...`，桥接经 Lead 授权投递；原生 `kimi-spec-dev` 被唤醒并给 Lead 回 `RELAY-OK` |
+| 原生队友 → 外部队友 | ✅ `kimi-spec-dev` 用原生 `send_message` 发给 `cli-agy`；桥接拦截并作为下一轮 prompt 投递，`cli-agy` 收到 `NATIVE-TO-EXT-OK` 并向 Lead 汇报 |
+| 内存自测（v1.2） | ✅ 38/38：新增「外部→原生中继」断言（delegation 记录、`relayedBy: lead`） |
+
 ## 5. 限制
 
 - **v1.1 已解决**：外部队友现在能通过注入的 Team CLI 自己发消息、读花名册、claim/complete/create/edit
   任务；Lead 仍然可以直接 assign/编辑/完成任务，两条路径都可用。外部队友仍没有通用 DSH 工具（文件/搜索等），
   这是预期行为（它们用自己产品的工具）。
-- **仍不支持**：外部队友不能直接给原生 DSH 队友发消息（桥接无法绕过 Lead 的授权给原生子 Agent 的 inbox 投递）；
-  先发给 lead，由 Lead 转达。
+- **v1.2 已解决（双向）**：外部队友可以给原生 DSH 队友发消息，原生队友也能直接回复外部队友。外部队友没有
+  DSH Agent 凭证，所以外→原生方向由 Lead 授权中继，原生队友看到的是带 `Forwarded from external teammate …`
+  标注的 Lead peer message；原生→外部方向由桥接直接注入外部会话。可用 `allowNativeRelay: false` 关闭外→原生。
 - 一个成员同一时刻只跑一个 CLI turn；运行中收到的消息排队到下一轮（不是原生 step-boundary steer）。
 - 被杀掉的 turn 不会自动重放，但会话本身可继续续聊。
 - 插件在 mount 时装饰服务实例；若未来 DSH 重命名 Team 服务，需要更新行配置。

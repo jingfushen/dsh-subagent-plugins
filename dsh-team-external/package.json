@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-team-external",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "Agent Team bridge: run external CLI agents (Antigravity, ZCode, Kimi Code) as persistent Team teammates with the native spawn/send/list/wait/interrupt and task-board surface.",
@@ -26,6 +26,6 @@
   },
   "meta": {
     "title": "External agents on the Team",
-    "description": "Adds spawn_external_teammate and bridges external CLI agents into the native Team roster, messaging, waiting, interruption, and shared task board. External teammates can also drive the Team themselves through the injected Team CLI (messages, task board claim/complete)."
+    "description": "Adds spawn_external_teammate and bridges external CLI agents into the native Team roster, messaging, waiting, interruption, and shared task board. External teammates can drive the Team themselves through the injected Team CLI (messages, task board claim/complete) and reach native teammates through a Lead-authorized relay."
   }
 }

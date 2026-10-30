@@ -33,6 +33,9 @@
         # External members are cheap roster rows; they get their own budget and do
         # not consume the native Agent Team maxMembers limit.
         maxExternalMembers: 8
+        # External CLI agents have no DSH Agent credential; reaching a native
+        # teammate inbox is relayed under the Lead's authority (user-authorized).
+        allowNativeRelay: true
         # Per-CLI overrides: command, model, extraArgs, env.
         providers:
           antigravity:
